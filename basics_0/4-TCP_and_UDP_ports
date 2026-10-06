@@ -1,4 +1,4 @@
 #!/bin/bash
-# Script to display listening ports with PID and program name
+# Script to display listening TCP/UDP ports with PID and program name
 
-sudo lsof -i -P -n | grep LISTEN
+sudo netstat -tulpn
