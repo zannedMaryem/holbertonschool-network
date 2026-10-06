@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 # Displays all active IPv4 IPs on the machine it's executed on
-hostname -I | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+ifconfig | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
