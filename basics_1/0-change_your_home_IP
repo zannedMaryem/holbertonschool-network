@@ -1,20 +1,71 @@
 #!/usr/bin/env bash
-# Configure localhost and facebook.com resolutions
+set -euo pipefail
 
 HOSTS_FILE="/etc/hosts"
 
-if [ "$(id -u)" -ne 0 ]; then
-  echo "This script must be run as root (use sudo)."
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "This script must be run as root (use sudo)." >&2
   exit 1
 fi
 
-# Backup
-cp $HOSTS_FILE ${HOSTS_FILE}.bak
+TEMP_FILE=$(mktemp "${HOSTS_FILE}.XXXXXX")
+trap 'rm -f -- "$TEMP_FILE"' EXIT
 
-# Overwrite entries safely
+cp -p -- "$HOSTS_FILE" "$TEMP_FILE"
+awk '
 {
-  echo "127.0.0.2   localhost"
-  echo "8.8.8.8     facebook.com"
-} | sudo tee -a $HOSTS_FILE > /dev/null
+  original = $0
+  content = $0
+  comment = ""
+  comment_start = index(content, "#")
+  if (comment_start) {
+    comment = substr(content, comment_start)
+    content = substr(content, 1, comment_start - 1)
+  }
 
-echo "Configuration updated. A backup was saved to ${HOSTS_FILE}.bak"
+  $0 = content
+  has_target = 0
+  for (i = 2; i <= NF; i++) {
+    hostname = tolower($i)
+    if (hostname == "localhost" || hostname == "facebook.com") {
+      has_target = 1
+    }
+  }
+
+  if (!has_target) {
+    print original
+    next
+  }
+
+  address = $1
+  output = address
+  kept_hostnames = 0
+  for (i = 2; i <= NF; i++) {
+    hostname = tolower($i)
+    if (hostname != "localhost" && hostname != "facebook.com") {
+      output = output " " $i
+      kept_hostnames++
+    }
+  }
+
+  if (kept_hostnames > 0) {
+    if (comment != "") {
+      output = output " " comment
+    }
+    print output
+  } else if (comment != "") {
+    print comment
+  }
+}
+END {
+  print "127.0.0.2 localhost"
+  print "8.8.8.8 facebook.com"
+}
+' "$HOSTS_FILE" > "$TEMP_FILE"
+
+cp -p -- "$HOSTS_FILE" "${HOSTS_FILE}.bak"
+mv -- "$TEMP_FILE" "$HOSTS_FILE"
+trap - EXIT
+
+echo "Updated localhost and facebook.com in ${HOSTS_FILE}."
+echo "Backup saved to ${HOSTS_FILE}.bak."
